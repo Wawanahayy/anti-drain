@@ -1,41 +1,70 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createWalletClient, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import fs from "fs";
-import chains from "../config/chains.json" assert {type:"json"};
 
-const chain = process.argv[2] || "sepolia";
-const config = chains[chain];
-if (!config) throw new Error("Chain not found");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
-const abi = JSON.parse(fs.readFileSync("./artifacts/AntiDrainVault.abi.json"));
-const bytecode = fs.readFileSync("./artifacts/AntiDrainVault.bin", "utf8");
+// baca artifact dari Hardhat (JSON biasa)
+const artifactPath = path.join(
+  __dirname,
+  "../artifacts/contracts/AntiDrainVault.sol/AntiDrainVault.json"
+);
+const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
 
-const account = privateKeyToAccount(process.env.OWNER_PK);
+const RPC_URL  = process.env.RPC_URL;
+const CHAIN_ID = Number(process.env.CHAIN_ID);
+const OWNER_PK = process.env.OWNER_PK;
+const OPERATOR = process.env.OPERATOR;
+const DAILY_ETH = process.env.DAILY_ETH || "0.02";
+
+if (!RPC_URL || !CHAIN_ID || !OWNER_PK || !OPERATOR) {
+  console.error("Isi .env dulu dengan RPC_URL, CHAIN_ID, OWNER_PK, OPERATOR");
+  process.exit(1);
+}
+
+const abi = artifact.abi;
+const bytecode = artifact.bytecode;
+const account = privateKeyToAccount(OWNER_PK);
 
 const client = createWalletClient({
   account,
   chain: {
-    id: config.chainId,
-    name: chain,
-    rpcUrls: { default: { http: [config.rpc] } }
+    id: CHAIN_ID,
+    name: "custom",
+    rpcUrls: { default: { http: [RPC_URL] } },
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
   },
-  transport: http(config.rpc),
+  transport: http(RPC_URL),
 });
 
-(async () => {
+async function main() {
+  console.log("[deploy] RPC_URL  =", RPC_URL);
+  console.log("[deploy] CHAIN_ID =", CHAIN_ID);
+  console.log("[deploy] Owner    =", account.address);
+  console.log("[deploy] Operator =", OPERATOR);
+  console.log("[deploy] DAILY_ETH=", DAILY_ETH);
+
+  const dailyLimitWei = parseEther(DAILY_ETH);
+
   const hash = await client.deployContract({
     abi,
     bytecode,
-    args: [
-      account.address,
-      process.env.OPERATOR || "",
-      parseEther("0.02")
-    ]
+    args: [account.address, OPERATOR, dailyLimitWei],
   });
 
-  console.log("TX:", hash);
+  console.log("[deploy] TX hash  =", hash);
+
   const receipt = await client.waitForTransactionReceipt({ hash });
-  console.log("Deployed at:", receipt.contractAddress);
-})();
+  console.log("[deploy] Status   =", receipt.status);
+  console.log("[deploy] VAULT    =", receipt.contractAddress);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
