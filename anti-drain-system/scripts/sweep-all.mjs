@@ -1,43 +1,40 @@
-import 'dotenv/config';
+import "dotenv/config";
+import tokens from "../config/tokens.json" assert { type: "json" };
+import artifact from "../artifacts/contracts/AntiDrainVault.sol/AntiDrainVault.json" assert { type: "json" };
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import fs from "fs";
-import chains from "../config/chains.json" assert {type:"json"};
 
-const chain = process.argv[2] || "sepolia";
-const config = chains[chain];
+const VAULT = process.env.VAULT;
+const OPERATOR_PK = process.env.OPERATOR_PK;
+const SAFE = process.env.SAFE; // tujuan sweep
 
-const operator = privateKeyToAccount(process.env.OPERATOR_PK);
+const RPC_URL = process.env.RPC_URL;
+const CHAIN_ID = Number(process.env.CHAIN_ID);
+
 const client = createWalletClient({
-  account: operator,
-  chain: { id: config.chainId },
-  transport: http(config.rpc)
+  account: privateKeyToAccount(OPERATOR_PK),
+  chain: { id: CHAIN_ID },
+  transport: http(RPC_URL)
 });
 
-const vault = process.env.VAULT;
-const abi = JSON.parse(fs.readFileSync("./artifacts/AntiDrainVault.abi.json"));
-
 (async () => {
-  // sweep ETH
-  let tx1 = await client.writeContract({
-    address: vault,
-    abi,
+  console.log("Sweeping ETH...");
+  await client.writeContract({
+    address: VAULT,
+    abi: artifact.abi,
     functionName: "sweepETH",
-    args: [process.env.SAFE]
+    args: [SAFE]
   });
-  console.log("Sweep ETH hash:", tx1);
 
-  // sweep common tokens
-  const tokens = JSON.parse(fs.readFileSync("./config/tokens.json"));
   for (const token of tokens) {
     try {
-      let tx = await client.writeContract({
-        address: vault,
-        abi,
+      console.log("Sweeping:", token);
+      await client.writeContract({
+        address: VAULT,
+        abi: artifact.abi,
         functionName: "sweepToken",
-        args: [token, process.env.SAFE]
+        args: [token, SAFE]
       });
-      console.log("Sweep:", token, tx);
     } catch {}
   }
 })();

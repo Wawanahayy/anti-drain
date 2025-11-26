@@ -1,25 +1,33 @@
-import 'dotenv/config';
+import "dotenv/config";
 import { ethers } from "ethers";
 import axios from "axios";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const chat = process.env.TELEGRAM_CHAT_ID;
+const RPC_URL = process.env.WATCHER_RPC;
+const VAULT = process.env.VAULT;
+const TELEGRAM_BOT = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-function alert(msg) {
-  return axios.get(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat}&text=${msg}`);
-}
+const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-const provider = new ethers.JsonRpcProvider(process.env.WATCHER_RPC);
-const vault = process.env.VAULT;
-
-// Event: Executed
 const iface = new ethers.Interface([
   "event Executed(address operator,address target,uint256 value,bytes data)"
 ]);
 
-provider.on(vault, (log) => {
+function alert(msg) {
+  return axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_BOT}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(
+      msg
+    )}`
+  );
+}
+
+console.log("Watcher aktif...");
+
+provider.on(VAULT, (log) => {
   try {
     const parsed = iface.parseLog(log);
-    alert(`VAULT EXECUTED:\nOperator:${parsed.args.operator}\nTarget:${parsed.args.target}\nValue:${parsed.args.value}`);
+    alert(
+      `VAULT EXECUTED\nOperator: ${parsed.args.operator}\nTarget: ${parsed.args.target}\nValue: ${parsed.args.value}`
+    );
   } catch {}
 });

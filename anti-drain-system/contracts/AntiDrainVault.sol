@@ -8,13 +8,12 @@ interface IERC20 {
 
 contract AntiDrainVault {
     address public owner;    
-    address public operator; 
-    
+    address public operator;
+
     uint256 public ethDailyLimit;
     mapping(address => uint256) public tokenDailyLimit;
 
-    mapping(address => uint256) public ethSpentToday; 
-    mapping(address => mapping(uint256 => uint256)) public tokenSpentToday;
+    mapping(uint256 => uint256) public ethSpentByDay; // day → total spent
 
     mapping(address => bool) public targetWhitelist;
 
@@ -86,8 +85,13 @@ contract AntiDrainVault {
         require(targetWhitelist[target], "target not allowed");
 
         uint256 day = block.timestamp / 1 days;
-        require(ethSpentToday[target] + value <= ethDailyLimit, "eth limit exceeded");
-        ethSpentToday[target] += value;
+
+        require(
+            ethSpentByDay[day] + value <= ethDailyLimit,
+            "eth limit exceeded"
+        );
+
+        ethSpentByDay[day] += value;
 
         (bool ok, bytes memory result) = target.call{value: value}(data);
         require(ok, "call failed");

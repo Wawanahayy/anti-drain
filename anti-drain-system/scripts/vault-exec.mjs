@@ -1,30 +1,30 @@
-import 'dotenv/config';
+import "dotenv/config";
+import artifact from "../artifacts/contracts/AntiDrainVault.sol/AntiDrainVault.json" assert { type: "json" };
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import fs from "fs";
-import chains from "../config/chains.json" assert {type:"json"};
 
-const chain = process.argv[2] || "sepolia";
-const config = chains[chain];
+const VAULT = process.env.VAULT;
+const OPERATOR_PK = process.env.OPERATOR_PK;
+
+const RPC_URL = process.env.RPC_URL;
+const CHAIN_ID = Number(process.env.CHAIN_ID);
+
+const TARGET = process.env.TARGET;
+const VALUE_WEI = BigInt(process.env.VALUE_WEI || "0");
+const DATA_HEX = process.env.DATA_HEX || "0x";
 
 const client = createWalletClient({
-  account: privateKeyToAccount(process.env.OPERATOR_PK),
-  chain: { id: config.chainId },
-  transport: http(config.rpc)
+  account: privateKeyToAccount(OPERATOR_PK),
+  chain: { id: CHAIN_ID },
+  transport: http(RPC_URL)
 });
-
-const abi = JSON.parse(fs.readFileSync("./artifacts/AntiDrainVault.abi.json"));
 
 (async () => {
   const hash = await client.writeContract({
-    address: process.env.VAULT,
-    abi,
+    address: VAULT,
+    abi: artifact.abi,
     functionName: "execute",
-    args: [
-      process.env.TARGET,
-      BigInt(process.env.VALUE_WEI || "0"),
-      process.env.DATA_HEX
-    ]
+    args: [TARGET, VALUE_WEI, DATA_HEX]
   });
 
   console.log("Executed TX:", hash);
