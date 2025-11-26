@@ -1,0 +1,18 @@
+{
+  "sepolia": {
+    "rpc": "https://sepolia.infura.io/v3/YOURKEY",
+    "chainId": 11155111
+  },
+  "base": {
+    "rpc": "https://mainnet.base.org",
+    "chainId": 8453
+  },
+  "arbitrum": {
+    "rpc": "https://arb1.arbitrum.io/rpc",
+    "chainId": 42161
+  },
+  "polygon": {
+    "rpc": "https://polygon-rpc.com",
+    "chainId": 137
+  }
+}
