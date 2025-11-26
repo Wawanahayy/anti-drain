@@ -1,41 +1,69 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import "dotenv/config";
+import fs from "fs";
 import { createWalletClient, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import fs from "fs";
-import chains from "../config/chains.json" assert {type:"json"};
 
-const chain = process.argv[2] || "sepolia";
-const config = chains[chain];
-if (!config) throw new Error("Chain not found");
+// Sederhanakan dulu: kita pilih chain via ENV saja
+const RPC_URL = process.env.RPC_URL;       // mis: https://sepolia.infura.io/v3/...
+const CHAIN_ID = Number(process.env.CHAIN_ID || "11155111"); // sepolia default
 
-const abi = JSON.parse(fs.readFileSync("./artifacts/AntiDrainVault.abi.json"));
-const bytecode = fs.readFileSync("./artifacts/AntiDrainVault.bin", "utf8");
+if (!RPC_URL) {
+  console.error("Set RPC_URL di .env");
+  process.exit(1);
+}
 
-const account = privateKeyToAccount(process.env.OWNER_PK);
+const OWNER_PK = process.env.OWNER_PK;
+const OPERATOR = process.env.OPERATOR;
+if (!OWNER_PK || !OPERATOR) {
+  console.error("Set OWNER_PK dan OPERATOR di .env");
+  process.exit(1);
+}
+
+// === baca artifact Hardhat ===
+const artifact = JSON.parse(
+  fs.readFileSync(
+    "./artifacts/contracts/AntiDrainVault.sol/AntiDrainVault.json",
+    "utf8"
+  )
+);
+
+const abi = artifact.abi;
+const bytecode = artifact.bytecode;
+
+const account = privateKeyToAccount(OWNER_PK);
 
 const client = createWalletClient({
   account,
   chain: {
-    id: config.chainId,
-    name: chain,
-    rpcUrls: { default: { http: [config.rpc] } }
+    id: CHAIN_ID,
+    name: "custom",
+    rpcUrls: { default: { http: [RPC_URL] } },
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
   },
-  transport: http(config.rpc),
+  transport: http(RPC_URL),
 });
 
-(async () => {
+async function main() {
+  console.log("[deploy] owner   =", account.address);
+  console.log("[deploy] operator=", OPERATOR);
+
+  const dailyLimit = parseEther(process.env.DAILY_ETH || "0.02");
+
   const hash = await client.deployContract({
     abi,
     bytecode,
-    args: [
-      account.address,
-      process.env.OPERATOR || "",
-      parseEther("0.02")
-    ]
+    args: [account.address, OPERATOR, dailyLimit],
   });
 
-  console.log("TX:", hash);
+  console.log("[deploy] tx hash =", hash);
+
   const receipt = await client.waitForTransactionReceipt({ hash });
-  console.log("Deployed at:", receipt.contractAddress);
-})();
+  console.log("[deploy] status  =", receipt.status);
+  console.log("[deploy] vault   =", receipt.contractAddress);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
